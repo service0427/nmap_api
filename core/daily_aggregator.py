@@ -64,5 +64,62 @@ def aggregate_daily_quota():
     finally:
         if 'conn' in locals(): conn.close()
 
+def sync_workload_to_legacy():
+    """
+    Syncs local daily_progress (site_id = 'FSD') success_cnt and fail_cnt 
+    back to the legacy FSD daily_tasks table for today and tomorrow.
+    """
+    kst_now = get_kst_now()
+    kst_date = get_kst_date()
+    print(f"--- Syncing Workload to Legacy (FSD): {kst_now} ---")
+    
+    legacy_conf = Config.get_source_fsd_config()
+    if not legacy_conf.get('host'):
+        print("  [FSD] Skip: Legacy DB configuration missing.")
+        return
+        
+    try:
+        local_conn = pymysql.connect(**DB_CONFIG)
+        legacy_conn = pymysql.connect(**legacy_conf, autocommit=True)
+        
+        days_to_sync = [kst_date, kst_date + timedelta(days=1)]
+        
+        with local_conn.cursor() as loc_cur, legacy_conn.cursor() as leg_cur:
+            for target_date in days_to_sync:
+                d_str = target_date.isoformat()
+                
+                # Fetch local daily progress for FSD
+                loc_cur.execute("""
+                    SELECT dest_id, success_cnt, fail_cnt 
+                    FROM daily_progress 
+                    WHERE work_date = %s AND site_id = 'FSD'
+                """, (d_str,))
+                progress_rows = loc_cur.fetchall()
+                
+                if not progress_rows:
+                    print(f"  [{d_str}] No local progress records to sync.")
+                    continue
+                
+                # Upsert to FSD daily_tasks
+                synced_cnt = 0
+                for row in progress_rows:
+                    sql = """
+                        INSERT INTO daily_tasks (dest_id, work_date, success_count, fail_count)
+                        VALUES (%s, %s, %s, %s)
+                        ON DUPLICATE KEY UPDATE 
+                            success_count = VALUES(success_count),
+                            fail_count = VALUES(fail_count)
+                    """
+                    leg_cur.execute(sql, (row['dest_id'], d_str, row['success_cnt'], row['fail_cnt']))
+                    synced_cnt += 1
+                
+                print(f"  [{d_str}] Synced {synced_cnt} records to FSD daily_tasks.")
+                
+        local_conn.close()
+        legacy_conn.close()
+    except Exception as e:
+        print(f"Error in sync_workload_to_legacy: {e}")
+
 if __name__ == "__main__":
     aggregate_daily_quota()
+    sync_workload_to_legacy()

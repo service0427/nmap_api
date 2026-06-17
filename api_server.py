@@ -98,7 +98,7 @@ def sync_legacy_task_end(site_id: str, device_id: str, dest_id: str, status: str
         conn = pymysql.connect(**conf, autocommit=True)
         with conn.cursor() as cursor:
             if status == 'SUCCESS':
-                cursor.execute("UPDATE daily_tasks SET success_count = success_count + 1, last_success_at = %s WHERE dest_id = %s AND work_date = CURDATE()", (end_time, dest_id))
+                cursor.execute("UPDATE daily_tasks SET success_count = success_count + 1, last_success_at = %s WHERE dest_id = %s AND work_date = %s", (end_time, dest_id, get_kst_date()))
         conn.close()
     except Exception as e: print(f"[Sync-Legacy] End Error: {e}")
 

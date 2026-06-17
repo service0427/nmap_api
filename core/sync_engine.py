@@ -150,15 +150,15 @@ def process_sync(site_id, standardized_data, source_places_cache=None, dry_run=F
                         UPDATE places 
                         SET is_optimizer = 1 
                         WHERE dest_id = %s 
-                          AND (check_status IS NULL OR check_status != 'VERIFIED' OR last_optimized_at < NOW() - INTERVAL 6 HOUR)
-                    """, (item['dest_id'],))
+                          AND (check_status IS NULL OR check_status != 'VERIFIED' OR last_optimized_at < %s - INTERVAL 6 HOUR)
+                    """, (item['dest_id'], get_kst_now()))
                 
                 if 'success_count' in item:
                     cursor.execute("""
                         INSERT INTO daily_progress (work_date, site_id, dest_id, success_cnt, fail_cnt, alloc_fail_cnt, last_dist_m)
-                        VALUES (CURDATE(), %s, %s, %s, 0, 0, 800)
+                        VALUES (%s, %s, %s, %s, 0, 0, 800)
                         ON DUPLICATE KEY UPDATE success_cnt = GREATEST(success_cnt, %s)
-                    """, (site_id, item['dest_id'], item['success_count'], item['success_count']))
+                    """, (get_kst_date(), site_id, item['dest_id'], item['success_count'], item['success_count']))
                 
                 record_str = f"{site_id}_{sid}_{item['dest_id']}_{item['work_count']}_{item['start_date']}_{item['end_date']}"
                 config_hash = hashlib.md5(record_str.encode()).hexdigest()
@@ -172,7 +172,7 @@ def process_sync(site_id, standardized_data, source_places_cache=None, dry_run=F
                     inserted += 1
                 else:
                     old = current_state[sid]
-                    if old['config_hash'] != config_hash:
+                    if old['config_hash'] != config_hash or old['status'] != 'on':
                         cursor.execute("""
                             UPDATE raw_slots SET dest_id=%s, work_count=%s, start_date=%s, end_date=%s, config_hash=%s, status='on', updated_at=%s
                             WHERE site_id=%s AND sid=%s

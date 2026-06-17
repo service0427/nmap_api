@@ -27,15 +27,11 @@ def fetch_data():
         kst_today = get_kst_date()
         
         with conn.cursor() as cursor:
-            # JOIN query with new filters: success_count=0 AND fail_count > 2
             sql = """
-                SELECT d.seq, d.dest_id, d.daily_limit, d.start_date, d.expiry_date 
-                FROM destinations d
-                INNER JOIN daily_tasks dt ON d.dest_id = dt.dest_id
-                WHERE dt.success_count = 0
-                  AND dt.fail_count > 2
-                  AND d.status = 'on'
-                  AND d.expiry_date >= %s
+                SELECT seq, dest_id, daily_limit, start_date, expiry_date 
+                FROM destinations
+                WHERE status = 'on'
+                  AND expiry_date >= %s
             """
             cursor.execute(sql, (kst_today,))
             rows = cursor.fetchall()
