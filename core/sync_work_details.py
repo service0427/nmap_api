@@ -4,6 +4,10 @@ import sys
 import argparse
 import requests
 import pymysql
+import re
+import json
+import hashlib
+import time
 from datetime import datetime
 
 # Adjust path for standalone execution
@@ -68,6 +72,293 @@ def fetch_all_slots(api_url, target_date_str):
             break
             
     return all_items
+
+def sync_rudolph_work(cursor, target_date_str):
+    import re
+    import hashlib
+    print("\nProcessing site: [RUDOLPH]")
+    
+    hash_dir = os.path.join(PROJECT_DIR, "data/hashes")
+    hash_file = os.path.join(hash_dir, f"sync_hash_work_details_rudolph.txt")
+    
+    # Helper to extract place_id
+    def extract_place_id(url):
+        if not url:
+            return None
+        url = str(url).strip()
+        match = re.search(r'/(?:place|restaurant|hospital|hairshop|nail|accommodation|stay|hotel|camping|resort|guestHouse|motel|pension|spa|studio|gym|academy|store)/(\d+)', url)
+        if match:
+            return match.group(1)
+        match = re.search(r'/([a-zA-Z]+)/(\d+)', url)
+        if match:
+            return match.group(2)
+        match = re.search(r'/(\d+)', url)
+        if match:
+            return match.group(1)
+        return None
+
+    # 1. Login to Rudolph
+    login_url = "http://rudolph-slot.club/login"
+    login_payload = {
+        "nickname": "rudolph",
+        "password": "rltjrWkd"
+    }
+    
+    session = requests.Session()
+    try:
+        resp = session.post(login_url, data=login_payload, allow_redirects=False, timeout=15)
+        if resp.status_code != 302:
+            print(f"  [RUDOLPH] Login failed, status code: {resp.status_code}")
+            return
+    except Exception as e:
+        print(f"  [RUDOLPH] Login request failed: {e}")
+        return
+        
+    # 2. Fetch slots page by page (500 items per page with full payload)
+    data_url = "http://rudolph-slot.club/accounts/slots/all"
+    data_headers = {
+        "content-type": "application/json",
+        "x-requested-with": "XMLHttpRequest",
+        "Referer": "http://rudolph-slot.club/slot_list",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+    
+    # We send full columns mapping to enable the server to return 500 items per request
+    payload_columns = [
+        {"data": None, "name": "", "searchable": True, "orderable": False, "search": {"value": "", "regex": False, "fixed": []}},
+        {"data": "id", "name": "id", "searchable": True, "orderable": True, "search": {"value": "", "regex": False, "fixed": []}},
+        {"data": None, "name": "", "searchable": True, "orderable": False, "search": {"value": "", "regex": False, "fixed": []}},
+        {"data": "start_date", "name": "start_date", "searchable": True, "orderable": True, "search": {"value": "", "regex": False, "fixed": []}},
+        {"data": "end_date", "name": "end_date", "searchable": True, "orderable": True, "search": {"value": "", "regex": False, "fixed": []}},
+        {"data": "end_date", "name": "remaining_days", "searchable": True, "orderable": True, "search": {"value": "", "regex": False, "fixed": []}},
+        {"data": "duration", "name": "duration", "searchable": True, "orderable": True, "search": {"value": "", "regex": False, "fixed": []}},
+        {"data": "advertiser", "name": "advertiser", "searchable": True, "orderable": True, "search": {"value": "", "regex": False, "fixed": []}},
+        {"data": "platform.name", "name": "platform_name", "searchable": True, "orderable": True, "search": {"value": "", "regex": False, "fixed": []}},
+        {"data": "rank", "name": "rank", "searchable": True, "orderable": True, "search": {"value": "", "regex": False, "fixed": []}},
+        {"data": "inflow_platform", "name": "inflow_platform", "searchable": True, "orderable": True, "search": {"value": "", "regex": False, "fixed": []}},
+        {"data": "keyword", "name": "keyword", "searchable": True, "orderable": True, "search": {"value": "", "regex": False, "fixed": []}},
+        {"data": "subkeyword", "name": "subkeyword", "searchable": True, "orderable": True, "search": {"value": "", "regex": False, "fixed": []}},
+        {"data": "brand_store_name", "name": "brand_store_name", "searchable": True, "orderable": True, "search": {"value": "", "regex": False, "fixed": []}},
+        {"data": "product_name", "name": "product_name", "searchable": True, "orderable": True, "search": {"value": "", "regex": False, "fixed": []}},
+        {"data": "url", "name": "url", "searchable": True, "orderable": True, "search": {"value": "", "regex": False, "fixed": []}},
+        {"data": "compare_url", "name": "compare_url", "searchable": True, "orderable": True, "search": {"value": "", "regex": False, "fixed": []}},
+        {"data": "extra_field_2", "name": "extra_field_2", "searchable": True, "orderable": True, "search": {"value": "", "regex": False, "fixed": []}},
+        {"data": "price", "name": "price", "searchable": True, "orderable": True, "search": {"value": "", "regex": False, "fixed": []}},
+        {"data": "image_url", "name": "image_url", "searchable": True, "orderable": True, "search": {"value": "", "regex": False, "fixed": []}},
+        {"data": "public_memo", "name": "public_memo", "searchable": True, "orderable": True, "search": {"value": "", "regex": False, "fixed": []}},
+        {"data": "created_at", "name": "created_at", "searchable": True, "orderable": True, "search": {"value": "", "regex": False, "fixed": []}},
+        {"data": "start_date", "name": "start_date_excel", "searchable": True, "orderable": True, "search": {"value": "", "regex": False, "fixed": []}},
+        {"data": "end_date", "name": "end_date_excel", "searchable": True, "orderable": True, "search": {"value": "", "regex": False, "fixed": []}}
+    ]
+
+    all_slots = []
+    start = 0
+    draw = 1
+    limit = 500
+    
+    while True:
+        payload = {
+            "draw": draw,
+            "columns": payload_columns,
+            "order": [{"column": 1, "dir": "desc", "name": "id"}],
+            "start": start,
+            "length": limit,
+            "slot_type": "6",
+            "pageLength": limit,
+            "_ts": int(time.time() * 1000),
+            "sort_field": "id",
+            "sort_dir": "desc"
+        }
+        
+        print(f"  Fetching Rudolph page {draw} (start: {start})...")
+        try:
+            resp = session.post(data_url, headers=data_headers, json=payload, timeout=15)
+            if resp.status_code != 200:
+                print(f"  [RUDOLPH] HTTP Error {resp.status_code} fetching page {draw}")
+                return
+            result = resp.json()
+        except Exception as e:
+            print(f"  [RUDOLPH] Request failed on page {draw}: {e}")
+            return
+            
+        items = result.get("data", [])
+        if not items:
+            break
+            
+        # Check if the server is repeating the same items (which happens when offset exceeds total count)
+        page_ids = [item.get("id") for item in items if item.get("id") is not None]
+        if page_ids:
+            # Check if all IDs on this page have already been collected
+            already_seen_all = True
+            for pid in page_ids:
+                if pid not in [x.get("id") for x in all_slots]:
+                    already_seen_all = False
+                    break
+            if already_seen_all:
+                print("  [RUDOLPH] Server started repeating previous items. Stopping fetch.")
+                break
+
+        all_slots.extend(items)
+        print(f"  Page {draw}: Got {len(items)} items. Total collected so far: {len(all_slots)}")
+        
+        # Check stopping condition: if all items on this page have end_date < target_date_str
+        all_expired = True
+        for item in items:
+            end_date = item.get("end_date")
+            if end_date and end_date >= target_date_str:
+                all_expired = False
+                break
+        
+        if all_expired:
+            print("  All items on this page are expired. Stopping fetch.")
+            break
+            
+        start += len(items)
+        draw += 1
+        
+    print(f"  [RUDOLPH] Fetched total {len(all_slots)} slot records.")
+    
+    # 3. Filter active slots for target_date_str and parse place IDs
+    active_slots = []
+    seen_ids = set()
+    for item in all_slots:
+        sid = item.get("id")
+        if sid is None or sid in seen_ids:
+            continue
+        url = str(item.get("url") or "").strip()
+        dest_id = extract_place_id(url)
+        if not dest_id:
+            continue
+        start_date = item.get("start_date")
+        end_date = item.get("end_date")
+        if start_date and end_date and start_date <= target_date_str <= end_date:
+            active_slots.append(item)
+            seen_ids.add(sid)
+            
+    print(f"  [RUDOLPH] Found {len(active_slots)} active slots for date {target_date_str}.")
+    
+    if not active_slots:
+        print("  [RUDOLPH] No active slots to insert.")
+        return
+        
+    # 4. Check hash of the active slots to skip if no changes
+    # Sort by slot ID to make hash deterministic
+    active_slots.sort(key=lambda x: int(x.get("id", 0)))
+    hash_data = [(str(x.get("id")), extract_place_id(x.get("url")), 5) for x in active_slots]
+    new_hash = hashlib.md5(json.dumps(hash_data).encode()).hexdigest()
+    
+    if os.path.exists(hash_file):
+        with open(hash_file, "r") as f:
+            saved_content = f.read().strip()
+        if saved_content == f"{target_date_str}:{new_hash}":
+            cursor.execute("SELECT COUNT(*) as cnt FROM raw_slots_tmp WHERE site = 'RUDOLPH' AND work_date = %s", (target_date_str,))
+            cnt_row = cursor.fetchone()
+            if cnt_row and cnt_row.get('cnt', 0) > 0:
+                print(f"  [RUDOLPH] No changes detected via hash ({new_hash}) for date {target_date_str}. Skipping sync.")
+                return
+
+    # 5. Clear existing Rudolph records for this date
+    cursor.execute("""
+        DELETE FROM raw_slots_tmp 
+        WHERE site = 'RUDOLPH' AND work_date = %s
+    """, (target_date_str,))
+    deleted_rows = cursor.rowcount
+    print(f"  [RUDOLPH] Cleared {deleted_rows} existing records for {target_date_str}.")
+    
+    # 6. Insert slot details individually
+    inserted_cnt = 0
+    kst_now = get_kst_now()
+    for item in active_slots:
+        sid = str(item.get("id"))
+        url = str(item.get("url"))
+        dest_id = extract_place_id(url)
+        work_count = 5 # Rudolph slot work_amount is 5
+        
+        cursor.execute("""
+            INSERT INTO raw_slots_tmp (site, sid, dest_id, work_count, work_date, created_at)
+            VALUES ('RUDOLPH', %s, %s, %s, %s, %s)
+        """, (sid, dest_id, work_count, target_date_str, kst_now))
+        inserted_cnt += 1
+        
+    print(f"  [RUDOLPH] Successfully inserted {inserted_cnt} slots (total workload: {inserted_cnt * 5}).")
+    
+    # 7. Save hash
+    with open(hash_file, "w") as f:
+        f.write(f"{target_date_str}:{new_hash}")
+    print(f"  [RUDOLPH] Saved sync hash: {new_hash}")
+
+def sync_luf_work(cursor, target_date_str):
+    import hashlib
+    print("\nProcessing site: [LUF]")
+    
+    hash_dir = os.path.join(PROJECT_DIR, "data/hashes")
+    hash_file = os.path.join(hash_dir, f"sync_hash_work_details_luf.txt")
+    
+    url = f"https://lufons.link/api/external/work?date={target_date_str}"
+    print(f"  Fetching LUF data from: {url}...")
+    try:
+        resp = requests.get(url, timeout=15)
+        if resp.status_code != 200:
+            print(f"  [LUF] HTTP Error: {resp.status_code}")
+            return
+        data_list = resp.json()
+    except Exception as e:
+        print(f"  [LUF] Request exception: {e}")
+        return
+        
+    if not isinstance(data_list, list):
+        print(f"  [LUF] Invalid API response format: expected list")
+        return
+        
+    if len(data_list) < 500:
+        print(f"  [LUF] Sync aborted: API returned only {len(data_list)} items (expected >= 500).")
+        return
+        
+    # Calculate hash of the content
+    new_hash = hashlib.md5(resp.content).hexdigest()
+    
+    # Check if hash matches
+    if os.path.exists(hash_file):
+        with open(hash_file, "r") as f:
+            saved_content = f.read().strip()
+        if saved_content == f"{target_date_str}:{new_hash}":
+            # Double check if raw_slots_tmp has records
+            cursor.execute("SELECT COUNT(*) as cnt FROM raw_slots_tmp WHERE site = 'LUF' AND work_date = %s", (target_date_str,))
+            cnt_row = cursor.fetchone()
+            if cnt_row and cnt_row.get('cnt', 0) > 0:
+                print(f"  [LUF] No changes detected via hash ({new_hash}) for date {target_date_str}. Skipping sync.")
+                return
+
+    # Clear existing LUF records for this date
+    cursor.execute("""
+        DELETE FROM raw_slots_tmp 
+        WHERE site = 'LUF' AND work_date = %s
+    """, (target_date_str,))
+    deleted_rows = cursor.rowcount
+    print(f"  [LUF] Cleared {deleted_rows} existing records for {target_date_str}.")
+    
+    # Insert slots
+    inserted_cnt = 0
+    kst_now = get_kst_now()
+    for index, item in enumerate(data_list):
+        code = str(item.get('code'))
+        if not code or code == 'None':
+            continue
+        sid = str(index + 1)
+        work_count = int(item.get('work_amount', 0))
+        
+        cursor.execute("""
+            INSERT INTO raw_slots_tmp (site, sid, dest_id, work_count, work_date, created_at)
+            VALUES ('LUF', %s, %s, %s, %s, %s)
+        """, (sid, code, work_count, target_date_str, kst_now))
+        inserted_cnt += 1
+        
+    print(f"  [LUF] Successfully inserted {inserted_cnt} slots.")
+    
+    # Save the new hash
+    with open(hash_file, "w") as f:
+        f.write(f"{target_date_str}:{new_hash}")
+    print(f"  [LUF] Saved sync hash: {new_hash}")
 
 def sync_work_details(target_date_str):
     print(f"=== Syncing work-details for date: {target_date_str} ===")
@@ -158,6 +449,10 @@ def sync_work_details(target_date_str):
                 
                 print(f"  [{site_name}] Fetched total {len(slots)} slots.")
                 
+                # Check for incomplete fetch to ensure atomicity
+                if total > 0 and len(slots) < total:
+                    raise RuntimeError(f"Sync failed for [{site_name}]: fetched {len(slots)} items but expected total {total}. Aborting transaction to prevent incomplete data.")
+                
                 # Clear existing records for this site and date to prevent duplicates
                 cursor.execute("""
                     DELETE FROM raw_slots_tmp 
@@ -191,6 +486,11 @@ def sync_work_details(target_date_str):
                     with open(hash_file, "w") as f:
                         f.write(f"{target_date_str}:{new_hash}")
                     print(f"  [{site_name}] Saved sync hash: {new_hash}")
+            # Sync LUF to raw_slots_tmp
+            sync_luf_work(cursor, target_date_str)
+            
+            # Sync RUDOLPH to raw_slots_tmp
+            sync_rudolph_work(cursor, target_date_str)
             
             # Commit the transaction
             conn.commit()

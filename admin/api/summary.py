@@ -59,6 +59,7 @@ async def get_admin_summary():
             luf = stats_by_site.get('LUF', {'target': 0, 'success': 0, 'fail': 0})
             ssolup = stats_by_site.get('ssolup', {'target': 0, 'success': 0, 'fail': 0})
             ghost2026 = stats_by_site.get('ghost2026', {'target': 0, 'success': 0, 'fail': 0})
+            rudolph = stats_by_site.get('RUDOLPH', {'target': 0, 'success': 0, 'fail': 0})
             test = stats_by_site.get('test', {'target': 0, 'success': 0, 'fail': 0})
             
             fsd_target = fsd['target'] or 0
@@ -77,6 +78,10 @@ async def get_admin_summary():
             ghost_success = ghost2026['success'] or 0
             ghost_fail = ghost2026['fail'] or 0
             
+            rudolph_target = rudolph['target'] or 0
+            rudolph_success = rudolph['success'] or 0
+            rudolph_fail = rudolph['fail'] or 0
+            
             test_target = test['target'] or 0
             test_success = test['success'] or 0
             test_fail = test['fail'] or 0
@@ -94,13 +99,16 @@ async def get_admin_summary():
                 "ghost_target": ghost_target,
                 "ghost_success": ghost_success,
                 "ghost_fail": ghost_fail,
+                "rudolph_target": rudolph_target,
+                "rudolph_success": rudolph_success,
+                "rudolph_fail": rudolph_fail,
                 "test_target": test_target,
                 "test_success": test_success,
                 "test_fail": test_fail,
-                "total_target": fsd_target + luf_target + test_target + ssolup_target + ghost_target,
-                "success": fsd_success + luf_success + test_success + ssolup_success + ghost_success,
-                "fail": fsd_fail + luf_fail + test_fail + ssolup_fail + ghost_fail,
-                "remain": max(0, (fsd_target + luf_target + test_target + ssolup_target + ghost_target) - (fsd_success + luf_success + test_success + ssolup_success + ghost_success))
+                "total_target": fsd_target + luf_target + test_target + ssolup_target + ghost_target + rudolph_target,
+                "success": fsd_success + luf_success + test_success + ssolup_success + ghost_success + rudolph_success,
+                "fail": fsd_fail + luf_fail + test_fail + ssolup_fail + ghost_fail + rudolph_fail,
+                "remain": max(0, (fsd_target + luf_target + test_target + ssolup_target + ghost_target + rudolph_target) - (fsd_success + luf_success + test_success + ssolup_success + ghost_success + rudolph_success))
             }
             
             # 2. System Status
