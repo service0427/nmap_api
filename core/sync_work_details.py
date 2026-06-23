@@ -87,6 +87,11 @@ def sync_work_details(target_date_str):
     nmap_db_config = Config.get_db_config()
     conn = pymysql.connect(**nmap_db_config, autocommit=False)
     
+    # Define Hash Dir
+    hash_dir = os.path.join(PROJECT_DIR, "data/hashes")
+    if not os.path.exists(hash_dir):
+        os.makedirs(hash_dir)
+        
     try:
         with conn.cursor() as cursor:
             for site_name, info in sites.items():
@@ -94,8 +99,63 @@ def sync_work_details(target_date_str):
                 default_work_amount = get_default_work_amount(info['db_name'])
                 print(f"  [{site_name}] Using default work amount: {default_work_amount}")
                 
-                # Fetch detailed slot list
-                slots = fetch_all_slots(info['api_url'], target_date_str)
+                # Fetch first page to inspect the hash and total
+                url = f"{info['api_url']}?date={target_date_str}&page=1&limit=1000"
+                print(f"  Fetching page 1 from {url}...")
+                try:
+                    resp = requests.get(url, timeout=15)
+                    if resp.status_code != 200:
+                        print(f"  HTTP Error: {resp.status_code}")
+                        continue
+                    data = resp.json()
+                except Exception as e:
+                    print(f"  Request exception: {e}")
+                    continue
+                
+                items = data.get('items', [])
+                total = data.get('total', 0)
+                new_hash = data.get('hash')
+                
+                if new_hash:
+                    hash_file = os.path.join(hash_dir, f"sync_hash_work_details_{site_name}.txt")
+                    # Check if date and hash match
+                    if os.path.exists(hash_file):
+                        with open(hash_file, "r") as f:
+                            saved_content = f.read().strip()
+                        if saved_content == f"{target_date_str}:{new_hash}":
+                            # Double check if raw_slots_tmp has records
+                            cursor.execute("SELECT COUNT(*) as cnt FROM raw_slots_tmp WHERE site = %s AND work_date = %s", (site_name, target_date_str))
+                            cnt_row = cursor.fetchone()
+                            if cnt_row and cnt_row.get('cnt', 0) > 0:
+                                print(f"  [{site_name}] No changes detected via hash ({new_hash}) for date {target_date_str}. Skipping sync.")
+                                continue
+                
+                # If hash didn't match (or wasn't present), proceed with full sync
+                slots = []
+                slots.extend(items)
+                
+                # Fetch remaining pages if any
+                limit = 1000
+                page = 2
+                while len(slots) < total and len(items) >= limit:
+                    next_url = f"{info['api_url']}?date={target_date_str}&page={page}&limit={limit}"
+                    print(f"  Fetching page {page} from {next_url}...")
+                    try:
+                        resp = requests.get(next_url, timeout=15)
+                        if resp.status_code != 200:
+                            print(f"  HTTP Error: {resp.status_code}")
+                            break
+                        page_data = resp.json()
+                        items = page_data.get('items', [])
+                        if not items:
+                            break
+                        slots.extend(items)
+                        print(f"  Page {page}: Got {len(items)} items. Total collected so far: {len(slots)}")
+                        page += 1
+                    except Exception as e:
+                        print(f"  Request exception: {e}")
+                        break
+                
                 print(f"  [{site_name}] Fetched total {len(slots)} slots.")
                 
                 # Clear existing records for this site and date to prevent duplicates
@@ -125,6 +185,12 @@ def sync_work_details(target_date_str):
                     inserted_cnt += 1
                 
                 print(f"  [{site_name}] Successfully inserted {inserted_cnt} slots.")
+                
+                # Save the new hash
+                if new_hash:
+                    with open(hash_file, "w") as f:
+                        f.write(f"{target_date_str}:{new_hash}")
+                    print(f"  [{site_name}] Saved sync hash: {new_hash}")
             
             # Commit the transaction
             conn.commit()
