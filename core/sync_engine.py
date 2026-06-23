@@ -56,7 +56,7 @@ def ensure_place_info(cursor, dest_id, source_places_cache=None, force_update=Fa
 
     if should_fetch:
         # 강제 업데이트가 아닐 때만 소스 캐시 활용 (원본 FSD 정보)
-        if source_places_cache and dest_id in source_places_cache and not force_update:
+        if source_places_cache and dest_id in source_places_cache and source_places_cache[dest_id].get('name') and not force_update:
             sp = source_places_cache[dest_id]
             cursor.execute("""
                 INSERT INTO places (dest_id, name, address, lat, lng)
