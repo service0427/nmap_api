@@ -1,14 +1,401 @@
 <!DOCTYPE html>
 <html lang="ko">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>NMAP ADMIN V1</title>
-    <script type="module" crossorigin src="/assets/index-Bt2nLr4W.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-CXPaVNbV.css">
-  </head>
-  <body>
-    <div id="root"></div>
-  </body>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NMAP COMMAND CENTER PRO</title>
+  <!-- Google Fonts: Inter & Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- AG Grid Community & Quartz Dark Theme -->
+  <script src="https://cdn.jsdelivr.net/npm/ag-grid-community@31.2.1/dist/ag-grid-community.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.2.1/styles/ag-grid.min.css"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.2.1/styles/ag-theme-quartz.min.css"/>
+  
+  <!-- Premium Style Sheet -->
+  <link rel="stylesheet" href="/style.css">
+  
+  <!-- Premium Modular Javascript Applications Entry Point -->
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+
+  <!-- Navigation Header -->
+  <header>
+    <div class="header-container">
+      <div class="logo-area">
+        <i data-lucide="shield-alert" class="logo-icon"></i>
+        <div class="logo-text">NMAP COMMAND CENTER</div>
+      </div>
+      <nav>
+        <button class="nav-btn active" id="nav-summary" onclick="window.switchTab('summary')">
+          <i data-lucide="layout-dashboard" style="width: 15px; height: 15px;"></i>대시보드
+        </button>
+        <button class="nav-btn" id="nav-devices" onclick="window.switchTab('devices')">
+          <i data-lucide="smartphone" style="width: 15px; height: 15px;"></i>디바이스
+        </button>
+        <button class="nav-btn" id="nav-destinations" onclick="window.switchTab('destinations')">
+          <i data-lucide="map-pin" style="width: 15px; height: 15px;"></i>목적지
+        </button>
+        <button class="nav-btn" id="nav-lte" onclick="window.switchTab('lte')">
+          <i data-lucide="wifi" style="width: 15px; height: 15px;"></i>LTE 사용량
+        </button>
+        <button class="nav-btn" id="nav-logs" onclick="window.switchTab('logs')">
+          <i data-lucide="list-collapse" style="width: 15px; height: 15px;"></i>최근 로그
+        </button>
+      </nav>
+      <div class="header-meta">
+        <div class="time-badge" id="kst-timer">
+          <i data-lucide="clock" style="width: 12px; height: 12px;"></i>KST --:--:--
+        </div>
+        <button class="refresh-btn" onclick="window.fetchData(true)" title="즉시 새로고침">
+          <i data-lucide="refresh-cw" style="width: 14px; height: 14px;" id="refresh-icon"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- 1. Dashboard Tab -->
+    <div id="tab-summary" class="tab-content active">
+      <!-- FSD, LUF, Test, Total Status Cards -->
+      <div class="summary-grid">
+        <!-- FSD Progress -->
+        <div class="card primary">
+          <div class="card-header">
+            <span class="card-title">FSD 작업 진행</span>
+            <span style="font-size:0.75rem; color:var(--color-primary); font-weight:700;">FSD</span>
+          </div>
+          <div class="card-value" id="fsd-percent">0%</div>
+          <div class="progress-wrapper">
+            <div class="progress-bar">
+              <div class="progress-fill primary" id="fsd-progress-fill" style="width: 0%"></div>
+            </div>
+          </div>
+          <div class="card-meta">
+            <span id="fsd-counts">목표: 0 | 성공: 0 | 실패: 0</span>
+          </div>
+        </div>
+
+        <!-- LUF Progress -->
+        <div class="card accent">
+          <div class="card-header">
+            <span class="card-title">LUF 작업 진행</span>
+            <span style="font-size:0.75rem; color:var(--color-accent); font-weight:700;">LUF</span>
+          </div>
+          <div class="card-value" id="luf-percent">0%</div>
+          <div class="progress-wrapper">
+            <div class="progress-bar">
+              <div class="progress-fill accent" id="luf-progress-fill" style="width: 0%"></div>
+            </div>
+          </div>
+          <div class="card-meta">
+            <span id="luf-counts">목표: 0 | 성공: 0 | 실패: 0</span>
+          </div>
+        </div>
+
+        <!-- Test Progress -->
+        <div class="card info">
+          <div class="card-header">
+            <span class="card-title">TEST 작업 진행</span>
+            <span style="font-size:0.75rem; color:var(--color-info); font-weight:700;">TEST</span>
+          </div>
+          <div class="card-value" id="test-percent">0%</div>
+          <div class="progress-wrapper">
+            <div class="progress-bar">
+              <div class="progress-fill info" id="test-progress-fill" style="width: 0%"></div>
+            </div>
+          </div>
+          <div class="card-meta">
+            <span id="test-counts">목표: 0 | 성공: 0 | 실패: 0</span>
+          </div>
+        </div>
+
+        <!-- Overall Summary Card -->
+        <div class="card warning">
+          <div class="card-header">
+            <span class="card-title">통합 작업 요약</span>
+            <span style="font-size:0.75rem; color:var(--color-warning); font-weight:700;">통합</span>
+          </div>
+          <div class="card-value" id="total-percent">0%</div>
+          <div class="progress-wrapper">
+            <div class="progress-bar">
+              <div class="progress-fill" id="total-progress-fill" style="width: 0%; background-color: var(--color-warning);"></div>
+            </div>
+          </div>
+          <div class="card-meta">
+            <span id="total-counts">성공: 0 / 목표: 0 (남음: 0)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dashboard Second Row: Server state, Success feed -->
+      <div class="dashboard-layout">
+        <!-- Server resource metrics & LTE usage overview -->
+        <div class="panel">
+          <div class="panel-header">
+            <h3 class="panel-title"><i data-lucide="server" style="width:16px; height:16px;"></i>서버 및 시스템 상태</h3>
+          </div>
+          <div style="padding: 1.25rem; display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; border-bottom: 1px solid var(--border-color);">
+            <div class="card" style="padding: 0.85rem; background-color: rgba(255, 255, 255, 0.01); text-align: center;">
+              <span style="font-size: 0.7rem; color: var(--text-muted);">CPU 사용량</span>
+              <div style="font-size: 1.35rem; font-weight: 800; margin-top: 0.25rem;" id="sys-cpu">--%</div>
+            </div>
+            <div class="card" style="padding: 0.85rem; background-color: rgba(255, 255, 255, 0.01); text-align: center;">
+              <span style="font-size: 0.7rem; color: var(--text-muted);">FastAPI 메모리</span>
+              <div style="font-size: 1.35rem; font-weight: 800; margin-top: 0.25rem;" id="sys-ram">-- MB</div>
+            </div>
+            <div class="card" style="padding: 0.85rem; background-color: rgba(255, 255, 255, 0.01); text-align: center;">
+              <span style="font-size: 0.7rem; color: var(--text-muted);">디스크 여유공간</span>
+              <div style="font-size: 1.35rem; font-weight: 800; margin-top: 0.25rem;" id="sys-disk">-- GB</div>
+            </div>
+          </div>
+          
+          <div class="panel-header" style="border-top: none;">
+            <h3 class="panel-title"><i data-lucide="wifi" style="width:16px; height:16px;"></i>LTE 데이터 실시간 사용량</h3>
+          </div>
+          <div style="padding: 1.25rem; display: flex; flex-direction: column; gap: 0.85rem;" id="lte-quick-list">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+
+        <!-- Real-time successes feed -->
+        <div class="panel" id="success-feed-container">
+          <!-- Timeline elements dynamically bound with header inside -->
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. Devices Tab (Intuitive Graphical Cards & Grouping) -->
+    <div id="tab-devices" class="tab-content">
+      <!-- 20m Critical Alerts Only -->
+      <div class="critical-alert-box alert-safe" id="devices-alert-monitor">
+        <div class="alert-header-row" style="color: var(--color-primary)">
+          <i data-lucide="shield-check" style="width: 18px; height: 18px;"></i>
+          <span>실시간 장애 모니터링 (20분 이상 무응답)</span>
+        </div>
+        <div style="font-size:0.8rem; color: var(--text-muted); margin-top: 0.25rem;" id="devices-alert-body">
+          현재 20분 이상 무응답인 장비가 없습니다. 전체 시스템이 원활하게 동작하고 있습니다.
+        </div>
+      </div>
+
+      <!-- Togglable Manual Management Panel -->
+      <div class="panel" style="margin-top: 0.5rem;">
+        <div class="panel-header" id="total-list-toggle-header" style="cursor: pointer; user-select: none;" onclick="window.toggleTotalDeviceList()">
+          <h3 class="panel-title" style="display:flex; align-items:center; gap:0.5rem;">
+            <i data-lucide="folder-cog" style="width:16px; height:16px; color:var(--color-accent)"></i>
+            <span>전체 장비 목록 및 수기 관리 (PC 그룹 단위)</span>
+            <span class="badge info" style="font-size:0.65rem;" id="total-devices-count-badge">--대 등록됨</span>
+          </h3>
+          <div style="display:flex; align-items:center; gap:0.5rem; color:var(--text-muted); font-size:0.75rem;">
+            <span id="toggle-list-text">클릭하여 접기</span>
+            <i data-lucide="chevron-up" id="toggle-list-icon" style="width:16px; height:16px;"></i>
+          </div>
+        </div>
+        
+        <!-- Toggle Content Container: Hidden by default -->
+        <div id="total-list-toggle-content" style="display: block; border-top: 1px solid var(--border-color);">
+          <!-- Efficiency comparison bar -->
+          <div class="summary-grid" style="grid-template-columns: repeat(3, 1fr); margin: 1rem 1.25rem 0.5rem 1.25rem; gap: 0.75rem;" id="devices-efficiency-board">
+            <div class="card primary" style="padding:0.75rem;">
+              <span style="font-size: 0.7rem; color: var(--text-muted);">전체 디바이스 가동률</span>
+              <div style="font-size: 1.25rem; font-weight: 800; margin-top: 0.15rem;" id="eff-active-ratio">-- / --대 (--%)</div>
+            </div>
+            <div class="card accent" style="padding:0.75rem;">
+              <span style="font-size: 0.7rem; color: var(--text-muted);">오늘 vs 어제 성공 비교</span>
+              <div style="font-size: 1.25rem; font-weight: 800; margin-top: 0.15rem;" id="eff-compare-success">-- / -- (-%)</div>
+            </div>
+            <div class="card info" style="padding:0.75rem;">
+              <span style="font-size: 0.7rem; color: var(--text-muted);">전체 작업 효율성 (성공률)</span>
+              <div style="font-size: 1.25rem; font-weight: 800; margin-top: 0.15rem;" id="eff-success-rate">--%</div>
+            </div>
+          </div>
+
+          <!-- Search and filters toolbar -->
+          <div class="search-bar" style="margin: 0.5rem 1.25rem;">
+            <div class="input-wrapper">
+              <i data-lucide="search"></i>
+              <input type="text" id="device-search-input" class="search-input" placeholder="그룹명, 디바이스 이름, ID, IP, 설치장소 검색..." oninput="window.onDeviceSearch()">
+            </div>
+            <select id="device-status-select" class="select-input" onchange="window.onDeviceSearch()" style="max-width: 180px;">
+              <option value="all">전체 기기 상태</option>
+              <option value="on">작동 중 (ON)</option>
+              <option value="off">미작동 (OFF)</option>
+              <option value="error">장애 감지 (ERROR/무응답)</option>
+            </select>
+            
+            <!-- View Mode Switcher buttons -->
+            <div style="display:flex; gap:0.25rem; background: rgba(255,255,255,0.03); padding: 0.2rem; border-radius: 6px; border: 1px solid var(--border-color);">
+              <button class="btn secondary sm active" id="btn-view-accordion" onclick="window.switchDeviceViewMode('accordion')" style="height:28px; padding:0 0.5rem;" title="그룹별 아코디언 카드 뷰">
+                <i data-lucide="layout-grid" style="width:12px; height:12px;"></i> 카드뷰
+              </button>
+              <button class="btn secondary sm" id="btn-view-compact" onclick="window.switchDeviceViewMode('compact')" style="height:28px; padding:0 0.5rem;" title="1000개 기기 한눈에 보는 바둑판 뷰">
+                <i data-lucide="grid-3x3" style="width:12px; height:12px;"></i> 컴팩트
+              </button>
+              <button class="btn secondary sm" id="btn-view-table" onclick="window.switchDeviceViewMode('table')" style="height:28px; padding:0 0.5rem;" title="ag-Grid 테이블 표 뷰">
+                <i data-lucide="table-properties" style="width:12px; height:12px;"></i> 테이블표
+              </button>
+            </div>
+          </div>
+
+          <!-- 1) Accordion Card View Container -->
+          <div style="padding: 0.5rem 1.25rem 1.25rem 1.25rem;" id="devices-accordion-container">
+            <!-- Dynamically generated accordion groupings by JS -->
+          </div>
+
+          <!-- 2) Compact Grid View Container -->
+          <div style="padding: 0.5rem 1.25rem 1.25rem 1.25rem; display: none;" id="devices-compact-container">
+            <!-- Rendered by JS -->
+          </div>
+
+          <!-- 3) Table ag-Grid View Container -->
+          <div style="padding: 0.5rem 1.25rem 1.25rem 1.25rem; display: none;" id="devices-table-container">
+            <div id="grid-devices-table" class="ag-theme-quartz-dark grid-panel" style="width: 100%; height: calc(100vh - 290px) !important;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Destinations Tab (ag-Grid) -->
+    <div id="tab-destinations" class="tab-content">
+      <div class="panel">
+        <div class="panel-header">
+          <h3 class="panel-title"><i data-lucide="map-pin" style="width:16px; height:16px;"></i>목적지 슬롯 제어</h3>
+        </div>
+        <div class="search-bar">
+          <div class="input-wrapper">
+            <i data-lucide="search"></i>
+            <input type="text" id="dest-search-input" class="search-input" placeholder="목적지명 또는 주소 검색..." oninput="window.onDestSearch()">
+          </div>
+          <select id="dest-status-select" class="select-input" onchange="window.onDestSearch()">
+            <option value="all">전체 상태</option>
+            <option value="on">활성화 (ON)</option>
+            <option value="off">비활성 (OFF)</option>
+          </select>
+        </div>
+        <div id="grid-destinations" class="ag-theme-quartz-dark grid-panel"></div>
+      </div>
+    </div>
+
+    <!-- 4. LTE Usage Tab (Card-view) -->
+    <div id="tab-lte" class="tab-content">
+      <div class="panel">
+        <div class="panel-header">
+          <h3 class="panel-title" style="display:flex; align-items:center; gap:0.5rem;">
+            <i data-lucide="wifi" style="width:16px; height:16px;"></i>
+            <span>LTE 장비 데이터 실시간 사용량 (어제 대비 분석)</span>
+          </h3>
+          <span class="badge info" style="font-size:0.75rem;" id="lte-summary-badge">모뎀: --개</span>
+        </div>
+        <div class="search-bar">
+          <div class="input-wrapper">
+            <i data-lucide="search"></i>
+            <input type="text" id="lte-search-input" class="search-input" placeholder="모뎀명 검색..." oninput="window.filterLteCards()">
+          </div>
+          <select id="lte-sort-select" class="select-input" onchange="window.filterLteCards()">
+            <option value="name_asc">모뎀명 정렬 (오름차순)</option>
+            <option value="today_desc">오늘 사용량 많은 순</option>
+            <option value="diff_desc">어제 대비 증가폭 순</option>
+          </select>
+        </div>
+        <div style="padding: 1.25rem; overflow: visible;">
+          <div id="lte-cards-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem;">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. Recent Logs Tab (ag-Grid) -->
+    <div id="tab-logs" class="tab-content">
+      <div class="panel">
+        <div class="panel-header">
+          <h3 class="panel-title"><i data-lucide="list" style="width:16px; height:16px;"></i>최근 100건 작업 히스토리</h3>
+        </div>
+        <div id="grid-logs" class="ag-theme-quartz-dark grid-panel"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Integrated Device Detail & Control Modal -->
+  <div class="modal-backdrop" id="device-detail-modal" onclick="document.getElementById('device-detail-modal').style.display='none'">
+    <div class="modal-container" onclick="event.stopPropagation()" style="max-width: 800px; width: 90%;">
+      <div class="modal-header">
+        <h3 class="panel-title" id="detail-modal-title" style="font-size:0.95rem; display:flex; align-items:center; gap:0.5rem;">
+          <i data-lucide="smartphone" style="width:18px; height:18px;"></i>
+          <span>디바이스 상세 제어</span>
+        </h3>
+        <button class="btn secondary sm" onclick="document.getElementById('device-detail-modal').style.display='none'">닫기</button>
+      </div>
+      <div class="modal-body" style="display: grid; grid-template-columns: 1fr 2fr; gap: 1.5rem; max-height: 520px; overflow: visible; padding: 1.25rem;">
+        
+        <!-- Left Column: Device Meta & Mute Control -->
+        <div style="display:flex; flex-direction:column; gap:0.75rem; border-right: 1px solid var(--border-color); padding-right:1.25rem; justify-content: flex-start;">
+          <h4 style="font-size:0.75rem; font-weight:700; color:var(--color-primary); text-transform:uppercase; letter-spacing:0.05em; display:flex; align-items:center; gap:0.3rem;">
+            <i data-lucide="smartphone" style="width:12px; height:12px;"></i>기기 정보 및 제어
+          </h4>
+          
+          <input type="hidden" id="detail-device-id">
+
+          <div style="font-size: 0.7rem; color: var(--text-muted); font-family: monospace; display:flex; justify-content:space-between; align-items:center; background: rgba(0,0,0,0.25); padding: 0.45rem 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); cursor:pointer; margin-top: 0.15rem;" id="detail-code-container" onclick="window.copyDeviceCode()" title="클릭하여 코드 복사">
+            <span>기기 코드 (ID):</span>
+            <span style="color: var(--color-primary); font-weight:700; display:flex; align-items:center; gap:0.25rem;">
+              <span id="detail-device-code">--</span>
+              <i data-lucide="copy" style="width:12px; height:12px;"></i>
+            </span>
+          </div>
+          
+          <!-- Mute toggle in details -->
+          <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.02); padding:0.5rem; border-radius:6px; border:1px solid var(--border-color); margin-top:0.15rem;">
+            <span style="font-size:0.7rem; font-weight:600; color:var(--text-muted);">장애 알림 음소거</span>
+            <button class="btn sm" id="detail-mute-btn" onclick="window.toggleDetailMute()" style="height:26px; padding:0 0.5rem; display:flex; align-items:center; gap:0.25rem; font-size:0.65rem;">
+              <i data-lucide="bell" style="width:12px; height:12px;"></i> <span id="detail-mute-text">알람 켜짐</span>
+            </button>
+          </div>
+        </div>
+        
+        <!-- Right Column: Success/Fail, IP and History Timeline -->
+        <div style="display:flex; flex-direction:column; gap:0.75rem; min-height: 0;">
+          <!-- Daily success trend list in details -->
+          <div style="background:rgba(255,255,255,0.02); padding:0.5rem; border-radius:6px; border:1px solid var(--border-color); display:flex; flex-direction:column; gap:0.25rem;" id="detail-trend-container">
+            <span style="font-size:0.675rem; font-weight:700; color:var(--color-primary); text-transform:uppercase; letter-spacing:0.05em; display:flex; align-items:center; gap:0.25rem;">
+              <i data-lucide="bar-chart-2" style="width:12px; height:12px;"></i>최근 7일 일자별 성공수
+            </span>
+            <div id="detail-daily-success-list" style="display:grid; grid-template-columns: repeat(7, 1fr); gap: 0.35rem; text-align:center; margin-top:0.15rem;">
+              <!-- Dynamically populated by JS -->
+            </div>
+          </div>
+
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-top: 0.15rem;">
+            <h4 style="font-size:0.75rem; font-weight:700; color:var(--color-accent); text-transform:uppercase; letter-spacing:0.05em; display:flex; align-items:center; gap:0.3rem;">
+              <i data-lucide="history" style="width:12px; height:12px;"></i><span id="detail-history-title">오늘 작업 이력</span>
+            </h4>
+            <span style="font-size:0.65rem; font-family:monospace; color:var(--text-muted); font-weight: 600;" id="detail-ip-display">IP: --.---.---.---</span>
+          </div>
+          
+          <div style="overflow-y:auto; flex:1; max-height: 290px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: rgba(0,0,0,0.15);">
+            <table style="width: 100%; font-size: 0.725rem; border-collapse: collapse; text-align: left;">
+              <thead>
+                <tr style="border-bottom:1px solid var(--border-color); background: rgba(255,255,255,0.01); color:var(--text-muted); font-weight:600;">
+                  <th style="padding: 0.45rem 0.5rem;">목적지</th>
+                  <th style="padding: 0.45rem 0.5rem; width: 55px;">상태</th>
+                  <th style="padding: 0.45rem 0.5rem; width: 90px;">시각</th>
+                  <th style="padding: 0.45rem 0.5rem; width: 60px;">소요(분)</th>
+                </tr>
+              </thead>
+              <tbody id="detail-history-body">
+                <!-- Dynamically loaded -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+        
+      </div>
+    </div>
+  </div>
+
+</body>
 </html>

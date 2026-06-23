@@ -40,7 +40,7 @@ def fetch_data():
         standardized_data = []
         for item in rows:
             standardized_data.append({
-                'sid': str(item['seq']),
+                'sid': int(item['seq']),  # BIGINT 정수형 컬럼 대응
                 'dest_id': str(item['dest_id']),
                 'work_count': int(item['daily_limit'] or 0),
                 'start_date': item['start_date'].isoformat() if item['start_date'] else kst_today.isoformat(),
