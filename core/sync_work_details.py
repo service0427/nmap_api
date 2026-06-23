@@ -151,71 +151,31 @@ def sync_rudolph_work(cursor, target_date_str):
         {"data": "end_date", "name": "end_date_excel", "searchable": True, "orderable": True, "search": {"value": "", "regex": False, "fixed": []}}
     ]
 
-    all_slots = []
-    start = 0
-    draw = 1
-    limit = 500
+    payload = {
+        "draw": 1,
+        "columns": payload_columns,
+        "order": [{"column": 1, "dir": "desc", "name": "id"}],
+        "start": 0,
+        "length": -1,
+        "slot_type": "6",
+        "pageLength": -1,
+        "_ts": int(time.time() * 1000),
+        "sort_field": "id",
+        "sort_dir": "desc"
+    }
     
-    while True:
-        payload = {
-            "draw": draw,
-            "columns": payload_columns,
-            "order": [{"column": 1, "dir": "desc", "name": "id"}],
-            "start": start,
-            "length": limit,
-            "slot_type": "6",
-            "pageLength": limit,
-            "_ts": int(time.time() * 1000),
-            "sort_field": "id",
-            "sort_dir": "desc"
-        }
-        
-        print(f"  Fetching Rudolph page {draw} (start: {start})...")
-        try:
-            resp = session.post(data_url, headers=data_headers, json=payload, timeout=15)
-            if resp.status_code != 200:
-                print(f"  [RUDOLPH] HTTP Error {resp.status_code} fetching page {draw}")
-                return
-            result = resp.json()
-        except Exception as e:
-            print(f"  [RUDOLPH] Request failed on page {draw}: {e}")
+    print(f"  Fetching all Rudolph slots in a single query (length: -1)...")
+    try:
+        resp = session.post(data_url, headers=data_headers, json=payload, timeout=25)
+        if resp.status_code != 200:
+            print(f"  [RUDOLPH] HTTP Error {resp.status_code} fetching slots")
             return
-            
-        items = result.get("data", [])
-        if not items:
-            break
-            
-        # Check if the server is repeating the same items (which happens when offset exceeds total count)
-        page_ids = [item.get("id") for item in items if item.get("id") is not None]
-        if page_ids:
-            # Check if all IDs on this page have already been collected
-            already_seen_all = True
-            for pid in page_ids:
-                if pid not in [x.get("id") for x in all_slots]:
-                    already_seen_all = False
-                    break
-            if already_seen_all:
-                print("  [RUDOLPH] Server started repeating previous items. Stopping fetch.")
-                break
-
-        all_slots.extend(items)
-        print(f"  Page {draw}: Got {len(items)} items. Total collected so far: {len(all_slots)}")
+        result = resp.json()
+    except Exception as e:
+        print(f"  [RUDOLPH] Request failed: {e}")
+        return
         
-        # Check stopping condition: if all items on this page have end_date < target_date_str
-        all_expired = True
-        for item in items:
-            end_date = item.get("end_date")
-            if end_date and end_date >= target_date_str:
-                all_expired = False
-                break
-        
-        if all_expired:
-            print("  All items on this page are expired. Stopping fetch.")
-            break
-            
-        start += len(items)
-        draw += 1
-        
+    all_slots = result.get("data", [])
     print(f"  [RUDOLPH] Fetched total {len(all_slots)} slot records.")
     
     # 3. Filter active slots for target_date_str and parse place IDs

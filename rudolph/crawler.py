@@ -136,64 +136,31 @@ def run_crawler(min_id=None, debug=False, sync=False):
         ],
         "order": [{"column": 1, "dir": "desc", "name": "id"}],
         "start": 0,
-        "length": 500,
+        "length": -1,
         "search": {"value": "", "regex": False, "fixed": []},
         "slot_type": "6",
         "searched": "",
-        "pageLength": 500,
+        "pageLength": -1,
         "_ts": int(time.time() * 1000),
         "sort_field": "id",
         "sort_dir": "desc"
     }
 
     all_data = []
-    start = 0
-    draw = 1
     
-    dprint("\n2. 슬롯 리스트 데이터 조회를 시작합니다 (페이지 크기: 500)...")
-    while True:
-        data_payload["start"] = start
-        data_payload["draw"] = draw
-        data_payload["_ts"] = int(time.time() * 1000)
-        
-        dprint(f"   - 요청 전송 (start: {start}, draw: {draw})...")
-        try:
-            data_response = session.post(data_url, headers=data_headers, json=data_payload, timeout=15)
-            if not data_response.ok:
-                print(f"     데이터 조회 실패: {data_response.reason}")
-                break
-                
-            result = data_response.json()
-            items = result.get("data", [])
-            if not items:
-                dprint("     가져올 데이터가 더 이상 없습니다. 조회를 중단합니다.")
-                break
-                
-            all_data.extend(items)
-            dprint(f"     {len(items)}개 항목 로드 완료 (누적: {len(all_data)}개)")
+    dprint("\n2. 슬롯 리스트 데이터 조회를 시작합니다 (전체 조회)...")
+    try:
+        data_response = session.post(data_url, headers=data_headers, json=data_payload, timeout=20)
+        if not data_response.ok:
+            print(f"     데이터 조회 실패: {data_response.reason}")
+            return
             
-            if min_id is None:
-                # If min_id is not specified/saved, we only fetch the first page (latest 500 slots)
-                break
-                
-            last_item = items[-1]
-            try:
-                last_item_id = int(last_item.get("id", 0))
-            except (ValueError, TypeError):
-                last_item_id = 0
-                
-            dprint(f"     현재 페이지의 최소 ID: {last_item_id} (목표 ID: {min_id})")
-            
-            if last_item_id <= min_id:
-                dprint("     목표 ID 범위에 도달했습니다. 조회를 완료합니다.")
-                break
-                
-            start += len(items)
-            draw += 1
-            
-        except Exception as e:
-            print(f"데이터 조회 중 오류 발생: {e}")
-            break
+        result = data_response.json()
+        all_data = result.get("data", [])
+        dprint(f"     전체 {len(all_data)}개 항목 로드 완료")
+    except Exception as e:
+        print(f"데이터 조회 중 오류 발생: {e}")
+        return
 
     # 3. Filter items and find max ID
     max_id_val = None
