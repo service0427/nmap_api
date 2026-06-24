@@ -378,8 +378,8 @@ async def log_system_metrics():
                 """, (kst_now, cpu, ram_mb, disk_free_gb, disk_total_gb, devices_cnt, req_cnt, net_sent_mb, net_recv_mb, pool_used))
                 
                 # Cleanup: Keep only last 7 days of optimizer success logs and IP allocation history
-                cursor.execute("DELETE FROM optimizer_success_logs WHERE created_at < NOW() - INTERVAL 7 DAY")
-                cursor.execute("DELETE FROM ip_allocation_history WHERE allocated_at < NOW() - INTERVAL 7 DAY")
+                cursor.execute("DELETE FROM optimizer_success_logs WHERE created_at < %s - INTERVAL 7 DAY", (kst_now,))
+                cursor.execute("DELETE FROM ip_allocation_history WHERE allocated_at < %s - INTERVAL 7 DAY", (kst_now,))
         except Exception as e: print(f"Monitoring Error: {e}")
         await asyncio.sleep(60)
 
