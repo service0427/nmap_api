@@ -633,14 +633,50 @@ async def report_result(report: ResultReport):
                 if task_row['status'] != 'SUCCESS':
                     update_device_stats(cursor, report.device_id, success=1)
                     cursor.execute("INSERT INTO ip_success_history (ip, dest_id, last_success_at) VALUES (%s, %s, %s) ON DUPLICATE KEY UPDATE last_success_at = VALUES(last_success_at)", (task_row['ip'], task_row['dest_id'], kst_now))
-                    cursor.execute("INSERT INTO daily_progress (work_date, site_id, dest_id, success_cnt, fail_cnt, alloc_fail_cnt, last_dist_m, last_success_at) VALUES (%s, %s, %s, 1, 0, 0, %s, %s) ON DUPLICATE KEY UPDATE success_cnt=success_cnt+1, last_success_at=VALUES(last_success_at), fail_cnt=0, alloc_fail_cnt=0, last_dist_m=VALUES(last_dist_m)", (kst_date, task_row['site_id'], task_row['dest_id'], task_row['distance_m'], kst_now))
+                    cursor.execute("INSERT INTO daily_progress (work_date, site_id, dest_id, success_cnt, fail_cnt, alloc_fail_cnt, last_dist_m, last_success_at) VALUES (%s, %s, %s, 1, 0, 0, %s, %s) ON DUPLICATE KEY UPDATE success_cnt=success_cnt+1, last_success_at=VALUES(last_success_at), miss_cnt=0, last_dist_m=VALUES(last_dist_m)", (kst_date, task_row['site_id'], task_row['dest_id'], task_row['distance_m'], kst_now))
                     
                     # Sync back to Legacy Server
                     sync_legacy_task_end(actual_task_id, task_row['site_id'], report.device_id, task_row['dest_id'], 'SUCCESS', kst_now, client_dist, client_time, report.message)
             else:
                 if not (task_row['status'] == 'FAIL' or task_row['status'].startswith('FAIL')):
                     update_device_stats(cursor, report.device_id, fail=1)
-                    cursor.execute("INSERT INTO daily_progress (work_date, site_id, dest_id, success_cnt, fail_cnt, alloc_fail_cnt, last_dist_m, last_fail_at) VALUES (%s, %s, %s, 0, 1, 0, %s, %s) ON DUPLICATE KEY UPDATE fail_cnt=fail_cnt+1, last_fail_at=VALUES(last_fail_at)", (kst_date, task_row['site_id'], task_row['dest_id'], task_row['distance_m'], kst_now))
+                    
+                    status_str = str(report.status or "")
+                    err_msg = str(report.message or "")
+                    is_miss = any(x in err_msg or x in status_str for x in ["NOT_FOUND", "MISS", "길찾기 결과가 없습니다", "미노출", "검색 실패", "목적지 검색 실패", "ADDRESS_NOT_FOUND"])
+                    is_timeout = any(x in err_msg for x in ["TIMEOUT", "NETWORK", "타임아웃", "통신", "Network"])
+                    is_mismatch = "IDENTITY_MISMATCH" in err_msg
+
+                    val_miss = 1 if is_miss else 0
+                    val_timeout = 1 if is_timeout else 0
+                    val_mismatch = 1 if is_mismatch else 0
+
+                    cursor.execute("""
+                        INSERT INTO daily_progress (
+                            work_date, site_id, dest_id, success_cnt, fail_cnt, alloc_fail_cnt, 
+                            miss_cnt, timeout_cnt, mismatch_cnt,
+                            last_dist_m, last_fail_at
+                        ) 
+                        VALUES (%s, %s, %s, 0, 1, 0, %s, %s, %s, %s, %s) 
+                        ON DUPLICATE KEY UPDATE 
+                            fail_cnt = fail_cnt + 1, 
+                            miss_cnt = miss_cnt + VALUES(miss_cnt),
+                            timeout_cnt = timeout_cnt + VALUES(timeout_cnt),
+                            mismatch_cnt = mismatch_cnt + VALUES(mismatch_cnt),
+                            last_fail_at = VALUES(last_fail_at)
+                    """, (
+                        kst_date, task_row['site_id'], task_row['dest_id'], 
+                        val_miss, val_timeout, val_mismatch, 
+                        task_row['distance_m'], kst_now
+                    ))
+                    
+                    # Immediately flag places.is_optimizer = 1 if miss_cnt >= 2
+                    cursor.execute("""
+                        UPDATE places p
+                        JOIN daily_progress dp ON p.dest_id = dp.dest_id
+                        SET p.is_optimizer = 1
+                        WHERE dp.dest_id = %s AND dp.work_date = %s AND dp.miss_cnt >= 2
+                    """, (task_row['dest_id'], kst_date))
                     
                     # Sync back to Legacy Server
                     sync_legacy_task_end(actual_task_id, task_row['site_id'], report.device_id, task_row['dest_id'], report.status, kst_now, client_dist, client_time, report.message)
@@ -698,7 +734,7 @@ async def update_status(data: StatusUpdate):
                             if data.device_id:
                                 update_device_stats(cursor, data.device_id, success=1)
                             cursor.execute("INSERT INTO ip_success_history (ip, dest_id, last_success_at) VALUES (%s, %s, %s) ON DUPLICATE KEY UPDATE last_success_at = VALUES(last_success_at)", (task_row['ip'], task_row['dest_id'], kst_now))
-                            cursor.execute("INSERT INTO daily_progress (work_date, site_id, dest_id, success_cnt, fail_cnt, alloc_fail_cnt, last_dist_m, last_success_at) VALUES (%s, %s, %s, 1, 0, 0, %s, %s) ON DUPLICATE KEY UPDATE success_cnt=success_cnt+1, last_success_at=VALUES(last_success_at), fail_cnt=0, alloc_fail_cnt=0, last_dist_m=VALUES(last_dist_m)", (kst_date, task_row['site_id'], task_row['dest_id'], task_row['distance_m'], kst_now))
+                            cursor.execute("INSERT INTO daily_progress (work_date, site_id, dest_id, success_cnt, fail_cnt, alloc_fail_cnt, last_dist_m, last_success_at) VALUES (%s, %s, %s, 1, 0, 0, %s, %s) ON DUPLICATE KEY UPDATE success_cnt=success_cnt+1, last_success_at=VALUES(last_success_at), miss_cnt=0, last_dist_m=VALUES(last_dist_m)", (kst_date, task_row['site_id'], task_row['dest_id'], task_row['distance_m'], kst_now))
                             
                             # Sync back to Legacy Server
                             if data.device_id:
@@ -707,7 +743,43 @@ async def update_status(data: StatusUpdate):
                         if not (task_row['status'] == 'FAIL' or task_row['status'].startswith('FAIL')):
                             if data.device_id:
                                 update_device_stats(cursor, data.device_id, fail=1)
-                            cursor.execute("INSERT INTO daily_progress (work_date, site_id, dest_id, success_cnt, fail_cnt, alloc_fail_cnt, last_dist_m, last_fail_at) VALUES (%s, %s, %s, 0, 1, 0, %s, %s) ON DUPLICATE KEY UPDATE fail_cnt=fail_cnt+1, last_fail_at=VALUES(last_fail_at)", (kst_date, task_row['site_id'], task_row['dest_id'], task_row['distance_m'], kst_now))
+                                
+                            status_str = str(data.status or "")
+                            err_msg = str(data.error_msg or "")
+                            is_miss = any(x in err_msg or x in status_str for x in ["NOT_FOUND", "MISS", "길찾기 결과가 없습니다", "미노출", "검색 실패", "목적지 검색 실패", "ADDRESS_NOT_FOUND"])
+                            is_timeout = any(x in err_msg for x in ["TIMEOUT", "NETWORK", "타임아웃", "통신", "Network"])
+                            is_mismatch = "IDENTITY_MISMATCH" in err_msg
+
+                            val_miss = 1 if is_miss else 0
+                            val_timeout = 1 if is_timeout else 0
+                            val_mismatch = 1 if is_mismatch else 0
+
+                            cursor.execute("""
+                                INSERT INTO daily_progress (
+                                    work_date, site_id, dest_id, success_cnt, fail_cnt, alloc_fail_cnt, 
+                                    miss_cnt, timeout_cnt, mismatch_cnt,
+                                    last_dist_m, last_fail_at
+                                ) 
+                                VALUES (%s, %s, %s, 0, 1, 0, %s, %s, %s, %s, %s) 
+                                ON DUPLICATE KEY UPDATE 
+                                    fail_cnt = fail_cnt + 1, 
+                                    miss_cnt = miss_cnt + VALUES(miss_cnt),
+                                    timeout_cnt = timeout_cnt + VALUES(timeout_cnt),
+                                    mismatch_cnt = mismatch_cnt + VALUES(mismatch_cnt),
+                                    last_fail_at = VALUES(last_fail_at)
+                            """, (
+                                kst_date, task_row['site_id'], task_row['dest_id'], 
+                                val_miss, val_timeout, val_mismatch, 
+                                task_row['distance_m'], kst_now
+                            ))
+
+                            # Immediately flag places.is_optimizer = 1 if miss_cnt >= 2
+                            cursor.execute("""
+                                UPDATE places p
+                                JOIN daily_progress dp ON p.dest_id = dp.dest_id
+                                SET p.is_optimizer = 1
+                                WHERE dp.dest_id = %s AND dp.work_date = %s AND dp.miss_cnt >= 2
+                            """, (task_row['dest_id'], kst_date))
                             
                             # Sync back to Legacy Server
                             if data.device_id:

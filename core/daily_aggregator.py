@@ -24,6 +24,38 @@ def aggregate_daily_quota():
     try:
         conn = pymysql.connect(**DB_CONFIG)
         with conn.cursor() as cursor:
+            # Daily Reset of Optimizer targets: Run once a day during the 3:00 AM hour KST
+            if kst_now.hour == 3:
+                project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                cleanup_run_file = os.path.join(project_dir, "data/hashes/cleanup_last_run.txt")
+                already_run = False
+                if os.path.exists(cleanup_run_file):
+                    with open(cleanup_run_file, "r") as f:
+                        if f.read().strip() == kst_date.isoformat():
+                            already_run = True
+                            
+                if not already_run:
+                    print("  Running Daily Optimizer Reset...")
+                    try:
+                        cursor.execute("""
+                            UPDATE places 
+                            SET is_optimizer = 0,
+                                dist_min_m = 1000,
+                                dist_max_m = 3000,
+                                check_status = 'NORMAL'
+                            WHERE is_optimizer = 1 OR check_status = 'FAIL'
+                        """)
+                        print(f"    Reset {cursor.rowcount} places optimizer status and restored 1km~3km distances for the new day.")
+                    except Exception as ex_reset:
+                        print(f"    Error resetting daily optimizer places: {ex_reset}")
+                    
+                    try:
+                        os.makedirs(os.path.dirname(cleanup_run_file), exist_ok=True)
+                        with open(cleanup_run_file, "w") as f:
+                            f.write(kst_date.isoformat())
+                    except Exception as ex_file:
+                        print(f"    Error writing cleanup_last_run file: {ex_file}")
+
             # We initialize for both Today and Tomorrow to avoid the midnight gap
             days_to_sync = [kst_date, kst_date + timedelta(days=1)]
             
