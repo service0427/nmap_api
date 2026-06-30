@@ -27,28 +27,28 @@ echo "--- Cron Cycle Started: $(date '+%Y-%m-%d %H:%M:%S') ---"
 # Step 1: Sync Engine (Old Server -> Local)
 # Syncs today's tasks and marks high-failure places for real-time optimization (is_optimizer=1)
 echo "[$(date '+%H:%M:%S')] [Step 1] Running Sync Engine..."
-$VENV_PYTHON core/sync_engine.py >> "$PROJECT_DIR/logs/sync.log" 2>&1
+/usr/bin/timeout 300s $VENV_PYTHON core/sync_engine.py >> "$PROJECT_DIR/logs/sync.log" 2>&1
 
 # Step 1-1: Async Verifier
 echo "[$(date '+%H:%M:%S')] [Step 1-1] Running Async Verifier..."
-$VENV_PYTHON core/async_verifier.py >> "$PROJECT_DIR/logs/verifier.log" 2>&1
+/usr/bin/timeout 300s $VENV_PYTHON core/async_verifier.py >> "$PROJECT_DIR/logs/verifier.log" 2>&1
 
 # Step 1-2: Sync Detailed Slot Workloads
 echo "[$(date '+%H:%M:%S')] [Step 1-2] Running Detailed Workload Sync..."
-$VENV_PYTHON core/sync_work_details.py >> "$PROJECT_DIR/logs/sync_work_details.log" 2>&1
+/usr/bin/timeout 300s $VENV_PYTHON core/sync_work_details.py >> "$PROJECT_DIR/logs/sync_work_details.log" 2>&1
 
 # Step 2: Daily Aggregator
 echo "[$(date '+%H:%M:%S')] [Step 2] Running Daily Aggregator..."
-$VENV_PYTHON core/daily_aggregator.py >> "$PROJECT_DIR/logs/aggregator.log" 2>&1
+/usr/bin/timeout 300s $VENV_PYTHON core/daily_aggregator.py >> "$PROJECT_DIR/logs/aggregator.log" 2>&1
 
 # Step 3: GPS Boundary Optimizer
 # Runs optimization for places with is_optimizer=1
 echo "[$(date '+%H:%M:%S')] [Step 3] Running GPS Boundary Optimizer..."
-$VENV_PYTHON core/optimizer.py >> "$PROJECT_DIR/logs/optimizer.log" 2>&1
+/usr/bin/timeout 600s $VENV_PYTHON core/optimizer.py >> "$PROJECT_DIR/logs/optimizer.log" 2>&1
 
 # Step 4: Batch Sync to Legacy Server (Local -> Old)
 echo "[$(date '+%H:%M:%S')] [Step 4] Running Batch Sync to Legacy..."
-$VENV_PYTHON core/sync_to_legacy.py >> "$PROJECT_DIR/logs/sync_to_legacy.log" 2>&1
+/usr/bin/timeout 300s $VENV_PYTHON core/sync_to_legacy.py >> "$PROJECT_DIR/logs/sync_to_legacy.log" 2>&1
 
 echo "--- Cron Cycle Finished: $(date '+%Y-%m-%d %H:%M:%S') ---"
 
