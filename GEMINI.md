@@ -1,12 +1,12 @@
 # Gemini Operational Instructions - Nmap API
 
 ## Server Roles
-- **Local (Dev)**:  - Development environment. Database: local MySQL.
-- **AWS (Prod API)**:  (api.qewr.link) - Main API server. 
-    - **Stack**: Nginx (Reverse Proxy) + FastAPI (PM2).
+- **Local (Dev)**: Development environment. Database: local MySQL.
+- **AWS (Prod API)**: Main API server (accessed directly via IP:Port).
+    - **Stack**: FastAPI (PM2).
     - **Capacity**: Optimized for hundreds of concurrent client connections.
-- **AWS (Prod Web)**:  (web.qewr.link) - Monitoring & Keyword Management.
-    - **Stack**: Apache (Port 80).
+- **AWS (Prod Web)**: Monitoring & Keyword Management (accessed directly via IP:Port).
+    - **Stack**: Apache / FastAPI (PM2).
     - **Access**: Admin use only, lightweight server.
 
 ## Development Standards
