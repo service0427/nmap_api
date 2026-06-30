@@ -119,23 +119,25 @@ def process_sync(site_id, standardized_data, source_places_cache=None, dry_run=F
                 ensure_place_info(cursor, item['dest_id'], source_places_cache, force_update=is_high_failure)
                 
                 if fail_cnt >= 2:
-                    # Query the place name to determine category-based narrow range
-                    cursor.execute("SELECT name FROM places WHERE dest_id = %s", (item['dest_id'],))
-                    p_row = cursor.fetchone()
-                    name = p_row['name'] if p_row else ''
+                    cursor.execute("SELECT dist_max_m FROM places WHERE dest_id = %s", (item['dest_id'],))
+                    p_dist_row = cursor.fetchone()
                     
-                    is_competitive = bool(re.search(r'누수|청소|하수구|변기|이사|싱크대|뚫음', name))
-                    dist_min = 10 if is_competitive else 100
-                    dist_max = 100 if is_competitive else 300
-                    
-                    cursor.execute("""
-                        UPDATE places 
-                        SET is_optimizer = 1,
-                            dist_min_m = %s,
-                            dist_max_m = %s
-                        WHERE dest_id = %s 
-                          AND (check_status IS NULL OR check_status != 'VERIFIED' OR last_optimized_at < %s - INTERVAL 6 HOUR)
-                    """, (dist_min, dist_max, item['dest_id'], get_kst_now()))
+                    # 기존 주행 거리가 너무 먼 경우(3km 초과)에만 점진적 케어 시작을 위해 1000m ~ 3000m 범위로 초기화
+                    curr_max = p_dist_row['dist_max_m'] if p_dist_row and p_dist_row['dist_max_m'] is not None else 10000
+                    if curr_max > 3000:
+                        cursor.execute("""
+                            UPDATE places 
+                            SET is_optimizer = 1,
+                                dist_min_m = 1000,
+                                dist_max_m = 3000
+                            WHERE dest_id = %s 
+                        """, (item['dest_id'],))
+                    else:
+                        cursor.execute("""
+                            UPDATE places 
+                            SET is_optimizer = 1
+                            WHERE dest_id = %s 
+                        """, (item['dest_id'],))
                 
                 if 'success_count' in item:
                     cursor.execute("""

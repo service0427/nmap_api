@@ -66,14 +66,37 @@ class VisibilityOptimizer:
             conn.close()
 
     def update_place_failed(self, dest_id, name):
-        """가시거리 확보 실패: 여전히 케어 모드 유지하되 점검 시간 및 최단거리만 업데이트"""
-        is_competitive = bool(re.search(r'누수|청소|하수구|변기|이사|싱크대|뚫음', name))
-        dist_min = 10 if is_competitive else 100
-        dist_max = 100 if is_competitive else 300
-        
+        """가시거리 확보 실패: 점진적으로 가시거리를 좁힘 (최소 100m ~ 300m 제한)"""
         conn = pymysql.connect(**DB_CONFIG, autocommit=True)
         try:
             with conn.cursor() as cursor:
+                # 1. 현재 설정된 거리 확인
+                cursor.execute("SELECT dist_min_m, dist_max_m FROM places WHERE dest_id = %s", (dest_id,))
+                row = cursor.fetchone()
+                
+                curr_min = 1000
+                curr_max = 3000
+                if row:
+                    curr_min = int(row['dist_min_m']) if row['dist_min_m'] is not None else 1000
+                    curr_max = int(row['dist_max_m']) if row['dist_max_m'] is not None else 3000
+                
+                # 2. 단계적으로 가시거리 좁히기 (10m 주행 방지, 내비게이션 최소 주행거리 확보)
+                if curr_max > 5000:
+                    new_max = 3000
+                    new_min = 1000
+                elif curr_max > 3000:
+                    new_max = 1500
+                    new_min = 500
+                elif curr_max > 1500:
+                    new_max = 800
+                    new_min = 300
+                elif curr_max > 800:
+                    new_max = 500
+                    new_min = 150
+                else:
+                    new_max = 300
+                    new_min = 100
+                    
                 cursor.execute("""
                     UPDATE places 
                     SET check_status = 'FAIL', 
@@ -81,8 +104,8 @@ class VisibilityOptimizer:
                         dist_max_m = %s,
                         last_optimized_at = %s 
                     WHERE dest_id = %s
-                """, (dist_min, dist_max, get_kst_now(), dest_id))
-                print(f"  [STILL-FAILED] {dest_id}: Not found even at 1km. Narrowed range to {dist_min}m ~ {dist_max}m.")
+                """, (new_min, new_max, get_kst_now(), dest_id))
+                print(f"  [STILL-FAILED] {dest_id}: Gradual shrink applied. Range narrowed from {curr_min}m~{curr_max}m to {new_min}m~{new_max}m.")
         finally:
             conn.close()
 
