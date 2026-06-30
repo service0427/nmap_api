@@ -51,6 +51,9 @@ async def get_admin_summary():
             ssolup = stats_by_site.get('SSOLUP', {'target': 0, 'success': 0, 'fail': 0})
             ghost2026 = stats_by_site.get('GHOST2026', {'target': 0, 'success': 0, 'fail': 0})
             rudolph = stats_by_site.get('RUDOLPH', {'target': 0, 'success': 0, 'fail': 0})
+            wjd = stats_by_site.get('WJDTJR07', {'target': 0, 'success': 0, 'fail': 0})
+            if not wjd or (wjd.get('target', 0) == 0 and wjd.get('success', 0) == 0 and wjd.get('fail', 0) == 0):
+                wjd = stats_by_site.get('WJDTJR', {'target': 0, 'success': 0, 'fail': 0})
             test = stats_by_site.get('TEST', {'target': 0, 'success': 0, 'fail': 0})
             
             fsd_target = fsd['target'] or 0
@@ -73,15 +76,19 @@ async def get_admin_summary():
             rudolph_success = rudolph['success'] or 0
             rudolph_fail = rudolph['fail'] or 0
             
+            wjd_target = wjd['target'] or 0
+            wjd_success = wjd['success'] or 0
+            wjd_fail = wjd['fail'] or 0
+            
             test_target = test['target'] or 0
             test_success = test['success'] or 0
             test_fail = test['fail'] or 0
             
-            # 통합 작업 요약 시 FSD와 TEST는 비활성화/제외 처리 (GHOST, SSOLUP, RUDOLPH, LUF만 포함)
-            total_active_target = luf_target + ssolup_target + ghost_target + rudolph_target
-            total_active_success = luf_success + ssolup_success + ghost_success + rudolph_success
-            total_active_fail = luf_fail + ssolup_fail + ghost_fail + rudolph_fail
-
+            # 통합 작업 요약 시 FSD와 TEST는 비활성화/제외 처리 (GHOST, SSOLUP, RUDOLPH, LUF, WJD 포함)
+            total_active_target = luf_target + ssolup_target + ghost_target + rudolph_target + wjd_target
+            total_active_success = luf_success + ssolup_success + ghost_success + rudolph_success + wjd_success
+            total_active_fail = luf_fail + ssolup_fail + ghost_fail + rudolph_fail + wjd_fail
+ 
             summary_stats = {
                 "fsd_target": fsd_target,
                 "fsd_success": fsd_success,
@@ -98,6 +105,9 @@ async def get_admin_summary():
                 "rudolph_target": rudolph_target,
                 "rudolph_success": rudolph_success,
                 "rudolph_fail": rudolph_fail,
+                "wjd_target": wjd_target,
+                "wjd_success": wjd_success,
+                "wjd_fail": wjd_fail,
                 "test_target": test_target,
                 "test_success": test_success,
                 "test_fail": test_fail,
@@ -105,6 +115,7 @@ async def get_admin_summary():
                 "success": total_active_success,
                 "fail": total_active_fail,
                 "remain": max(0, total_active_target - total_active_success)
+            }et - total_active_success)
             }
             
             # 2. System Status
