@@ -65,18 +65,24 @@ class VisibilityOptimizer:
         finally:
             conn.close()
 
-    def update_place_failed(self, dest_id):
-        """가시거리 확보 실패: 여전히 케어 모드 유지하되 점검 시간만 업데이트"""
+    def update_place_failed(self, dest_id, name):
+        """가시거리 확보 실패: 여전히 케어 모드 유지하되 점검 시간 및 최단거리만 업데이트"""
+        is_competitive = bool(re.search(r'누수|청소|하수구|변기|이사|싱크대|뚫음', name))
+        dist_min = 10 if is_competitive else 100
+        dist_max = 100 if is_competitive else 300
+        
         conn = pymysql.connect(**DB_CONFIG, autocommit=True)
         try:
             with conn.cursor() as cursor:
                 cursor.execute("""
                     UPDATE places 
                     SET check_status = 'FAIL', 
+                        dist_min_m = %s,
+                        dist_max_m = %s,
                         last_optimized_at = %s 
                     WHERE dest_id = %s
-                """, (get_kst_now(), dest_id))
-                print(f"  [STILL-FAILED] {dest_id}: Not found even at 1km.")
+                """, (dist_min, dist_max, get_kst_now(), dest_id))
+                print(f"  [STILL-FAILED] {dest_id}: Not found even at 1km. Narrowed range to {dist_min}m ~ {dist_max}m.")
         finally:
             conn.close()
 
@@ -217,7 +223,7 @@ class VisibilityOptimizer:
         if best_found_dist:
             self.update_place_verified(dest_id, best_found_dist)
         else:
-            self.update_place_failed(dest_id)
+            self.update_place_failed(dest_id, name)
 
     def run(self):
         print(f"=== Visibility Management Tool Started: {get_kst_now()} ===")

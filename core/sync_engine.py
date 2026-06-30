@@ -119,12 +119,23 @@ def process_sync(site_id, standardized_data, source_places_cache=None, dry_run=F
                 ensure_place_info(cursor, item['dest_id'], source_places_cache, force_update=is_high_failure)
                 
                 if fail_cnt >= 2:
+                    # Query the place name to determine category-based narrow range
+                    cursor.execute("SELECT name FROM places WHERE dest_id = %s", (item['dest_id'],))
+                    p_row = cursor.fetchone()
+                    name = p_row['name'] if p_row else ''
+                    
+                    is_competitive = bool(re.search(r'누수|청소|하수구|변기|이사|싱크대|뚫음', name))
+                    dist_min = 10 if is_competitive else 100
+                    dist_max = 100 if is_competitive else 300
+                    
                     cursor.execute("""
                         UPDATE places 
-                        SET is_optimizer = 1 
+                        SET is_optimizer = 1,
+                            dist_min_m = %s,
+                            dist_max_m = %s
                         WHERE dest_id = %s 
                           AND (check_status IS NULL OR check_status != 'VERIFIED' OR last_optimized_at < %s - INTERVAL 6 HOUR)
-                    """, (item['dest_id'], get_kst_now()))
+                    """, (dist_min, dist_max, item['dest_id'], get_kst_now()))
                 
                 if 'success_count' in item:
                     cursor.execute("""
