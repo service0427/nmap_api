@@ -34,8 +34,8 @@ def fetch_data():
             print(f"[WJDTJR07] Invalid API response format: expected list, got {type(data_list)}")
             return None
             
-        if len(data_list) < 500:
-            print(f"[WJDTJR07] Sync aborted: API returned only {len(data_list)} items (expected >= 500). Treating as temporary failure to retry.")
+        if len(data_list) == 0:
+            print("[WJDTJR07] Sync aborted: API returned 0 items. Treating as temporary failure to retry.")
             return None
             
         standardized_data = []
